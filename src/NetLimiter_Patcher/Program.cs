@@ -211,7 +211,7 @@ namespace NetLimiter_Patcher
             if (!Directory.Exists(directoryName)) directoryName = Path.GetDirectoryName(directoryName);
 
             // Patch the app
-            PatchApp(File2PatchBackup, File2Patch);
+            PatchApp(File2PatchBackup, directoryName);
         }
 
         private static void TryElevatePrivilege(string message = null)
