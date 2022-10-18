@@ -13,10 +13,9 @@ namespace NetLimiter_Patcher
 {
     internal static class Program
     {
-        private static readonly string SupposedDirectory = $@"{Environment.ExpandEnvironmentVariables("%ProgramW6432%")}\Locktime Software\NetLimiter 4";
-        private static readonly string File2Patch = $@"{SupposedDirectory}\NetLimiter.dll";
-        private static readonly string File2PatchBackup = $"{File2Patch}.bak";
-
+        private static string _supposedDirectory = $@"{Environment.ExpandEnvironmentVariables("%ProgramW6432%")}\Locktime Software\NetLimiter 4";
+        private static string _file2Patch = $@"{_supposedDirectory}\NetLimiter.dll";
+        private static string _file2PatchBackup = $"{_file2Patch}.bak";
         private static string _registrationName = "Mrakovic-ORG";
 
         public static void Main()
@@ -36,11 +35,11 @@ namespace NetLimiter_Patcher
             if (message != null) Console.WriteLine($"{message}\nTry again.\n");
 
             // If it cannot find the supposed default DAEMON directory manually asks for the path
-            if (!Directory.Exists(SupposedDirectory)) ManualPatchApp();
+            if (!Directory.Exists(_supposedDirectory)) ManualPatchApp();
 
             // Else asks if it should patch automatically
             Console.Write(
-                $"Successfully found the application directory at '{SupposedDirectory}'\nAre you willing to proceed to an automatic patch?\n\n0: No\n1: Yes\n# ");
+                $"Successfully found the application directory at '{_supposedDirectory}'\nAre you willing to proceed to an automatic patch?\n\n0: No\n1: Yes\n# ");
             var choice = Console.ReadKey().Key;
 
             switch (choice)
@@ -82,27 +81,27 @@ namespace NetLimiter_Patcher
         private static void PatchApp(string inputModulePath, string outputModulePath)
         {
             // Throw back at setup if the file we looking for is not found
-            if (!File.Exists(File2Patch))
+            if (!File.Exists(_file2Patch))
             {
-                SetupInstruction($@"Unable to locate {File2Patch} within that directory.");
+                SetupInstruction($@"Unable to locate {_file2Patch} within that directory.");
             }
 
             // Check if the file is writable
-            if (!WriteAccess(File2Patch)) TryElevatePrivilege("Insufficient permission to modify the file.");
+            if (!WriteAccess(_file2Patch)) TryElevatePrivilege("Insufficient permission to modify the file.");
 
             // Make a backup in case there is none
             try
             {
-                if (!File.Exists(File2PatchBackup))
+                if (!File.Exists(_file2PatchBackup))
                 {
                     Console.WriteLine($@"No backup file detected backing-up...");
-                    File.Move(File2Patch, File2PatchBackup);
+                    File.Move(_file2Patch, _file2PatchBackup);
                 }
                 else Console.WriteLine("An backup is already existing, Skipping...");
             }
             catch
             {
-                TryElevatePrivilege($"Could not make a backup at '{File2PatchBackup}'");
+                TryElevatePrivilege($"Could not make a backup at '{_file2PatchBackup}'");
             }
 
             // Ask for a registration name
@@ -195,7 +194,7 @@ namespace NetLimiter_Patcher
 
         private static void AutomaticPatchApp()
         {
-            PatchApp(File2PatchBackup, File2Patch);
+            PatchApp(_file2PatchBackup, _file2Patch);
         }
 
         private static void ManualPatchApp()
@@ -205,13 +204,14 @@ namespace NetLimiter_Patcher
 
             // Parse path by console line
             var getLine = Console.ReadLine();
-            var directoryName = Path.GetFullPath(getLine?.Replace("\"", ""));
+            _supposedDirectory = Path.GetFullPath(getLine?.Replace("\"", ""));
 
-            // In case the path is not a directory replace directoryName to the file directory name
-            if (!Directory.Exists(directoryName)) directoryName = Path.GetDirectoryName(directoryName);
+            // In case the path is not a directory replace _supposedDirectory to the file directory name
+            if (!Directory.Exists(_supposedDirectory)) _supposedDirectory = Path.GetDirectoryName(_supposedDirectory);
 
-            // Patch the app
-            PatchApp(File2PatchBackup, directoryName);
+            // Since we updated supposed directory path we need to do as well for the file to patch
+            _file2Patch = $@"{_supposedDirectory}\NetLimiter.dll";
+            _file2PatchBackup = $"{_file2Patch}.bak";
         }
 
         private static void TryElevatePrivilege(string message = null)
@@ -287,7 +287,7 @@ namespace NetLimiter_Patcher
 
             // Get the identity of the current user and the groups that the user is in.
             var groups = WindowsIdentity.GetCurrent().Groups;
-            string sidCurrentUser = WindowsIdentity.GetCurrent().User.Value;
+            var sidCurrentUser = WindowsIdentity.GetCurrent().User.Value;
 
             // Check if writing to the file is explicitly denied for this user or a group the user is in.
             if (rules.OfType<FileSystemAccessRule>().Any(r =>
