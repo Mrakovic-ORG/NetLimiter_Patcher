@@ -6,6 +6,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Threading;
 using dnlib.DotNet;
+using dnlib.DotNet.Emit;
 using dnlib.DotNet.Writer;
 using OpCodes = dnlib.DotNet.Emit.OpCodes;
 
@@ -40,9 +41,8 @@ namespace NetLimiter_Patcher
             // Else asks if it should patch automatically
             Console.Write(
                 $"Successfully found the application directory at '{_supposedDirectory}'\nAre you willing to proceed to an automatic patch?\n\n0: No\n1: Yes\n# ");
-            var choice = Console.ReadKey().Key;
-
-            switch (choice)
+            
+            switch (Console.ReadKey().Key)
             {
                 case ConsoleKey.D0:
                 case ConsoleKey.NumPad0:
@@ -118,72 +118,67 @@ namespace NetLimiter_Patcher
                 // Loop true methods
                 foreach (var method in type.Methods)
                 {
-                    // Unlock features
-                    // We are doing so by changing the ProductCode which is getting checked and unlocking features
-                    // At NLClientApp.Core.dll NLClientApp.Core.ViewModels.MainVM::UpdateSupportedFeatures()
-                    if (method.Name == "get_ProductCode")
+                    if (method.HasBody)
                     {
-                        Console.WriteLine($"Patching: {method.FullName}");
                         var methodInstr = method.Body.Instructions;
-
-                        methodInstr.Clear();
-                        methodInstr.Add(OpCodes.Ldstr.ToInstruction("nl4pro"));
-                        methodInstr.Add(OpCodes.Ret.ToInstruction());
-                    }
-
-                    // Change license quantity to something more leet
-                    if (method.Name == "get_Quantity")
-                    {
-                        Console.WriteLine($"Patching: {method.FullName}");
-                        var methodInstr = method.Body.Instructions;
-
-                        methodInstr.Clear();
-                        methodInstr.Add(OpCodes.Ldc_I4.ToInstruction(1337));
-                        methodInstr.Add(OpCodes.Ret.ToInstruction());
-                    }
-
-                    // Change default license type to enterprise
-                    if (method.Name == "get_LicenseType")
-                    {
-                        Console.WriteLine($"Patching: {method.FullName}");
-                        var methodInstr = method.Body.Instructions;
-
-                        methodInstr.Clear();
-                        methodInstr.Add(OpCodes.Ldc_I4_2.ToInstruction());
-                        methodInstr.Add(OpCodes.Ret.ToInstruction());
-                    }
-
-                    // Change default license registration name
-                    if (method.Name == "get_RegistrationName")
-                    {
-                        Console.WriteLine($"Patching: {method.FullName}");
-                        var methodInstr = method.Body.Instructions;
-
-                        methodInstr.Clear();
-                        methodInstr.Add(OpCodes.Ldstr.ToInstruction(_registrationName));
-                        methodInstr.Add(OpCodes.Ret.ToInstruction());
-                    }
-
-                    // Force IsRegistered
-                    if (method.Name == "get_IsRegistered")
-                    {
-                        Console.WriteLine($"Patching: {method.FullName}");
-                        var methodInstr = method.Body.Instructions;
-
-                        methodInstr.Clear();
-                        methodInstr.Add(OpCodes.Ldc_I4_1.ToInstruction());
-                        methodInstr.Add(OpCodes.Ret.ToInstruction());
-                    }
-
-                    // Disable Expiration
-                    if (method.Name == "get_HasExpiration" || method.Name == "get_IsExpired")
-                    {
-                        Console.WriteLine($"Patching: {method.FullName}");
-                        var methodInstr = method.Body.Instructions;
-
-                        methodInstr.Clear();
-                        methodInstr.Add(OpCodes.Ldc_I4_0.ToInstruction());
-                        methodInstr.Add(OpCodes.Ret.ToInstruction());
+                        
+                        switch (method.Name)
+                        {
+                            // Unlock features
+                            // We are doing so by changing the ProductCode which is getting checked and unlocking features
+                            // At NLClientApp.Core.dll NLClientApp.Core.ViewModels.MainVM::UpdateSupportedFeatures()
+                            case "get_ProductCode":
+                                Console.WriteLine($"Patching: {method.FullName}");
+                                methodInstr.Clear();
+                                methodInstr.Add(OpCodes.Ldstr.ToInstruction("nl4pro"));
+                                methodInstr.Add(OpCodes.Ret.ToInstruction());
+                                break;
+                            case "get_Quantity":
+                                Console.WriteLine($"Patching: {method.FullName}");
+                                methodInstr.Clear();
+                                methodInstr.Add(OpCodes.Ldc_I4.ToInstruction(1337));
+                                methodInstr.Add(OpCodes.Ret.ToInstruction());
+                                break;
+                            // Change default license type to enterprise
+                            case "get_LicenseType":
+                                // ref: https://github.com/Mrakovic-ORG/NetLimiter_Patcher/issues/3
+                                // TODO: Update sig for version >= 5.0
+                                if (method.ReturnType.TypeName != "String")
+                                {
+                                    Console.WriteLine($"Patching: {method.FullName}");
+                                    methodInstr.Clear();
+                                    methodInstr.Add(OpCodes.Ldc_I4_2.ToInstruction());
+                                    methodInstr.Add(OpCodes.Ret.ToInstruction());
+                                }
+                                break;
+                            case "get_RegistrationName":
+                                Console.WriteLine($"Patching: {method.FullName}");
+                                methodInstr.Clear();
+                                methodInstr.Add(OpCodes.Ldstr.ToInstruction(_registrationName));
+                                methodInstr.Add(OpCodes.Ret.ToInstruction());
+                                break;
+                            case "get_IsRegistered":
+                                Console.WriteLine($"Patching: {method.FullName}");
+                                methodInstr.Clear();
+                                methodInstr.Add(OpCodes.Ldc_I4_1.ToInstruction());
+                                methodInstr.Add(OpCodes.Ret.ToInstruction());
+                                break;
+                            // Import the MaxValue field from DateTime as return
+                            case "get_Expiration":
+                                Console.WriteLine($"Patching: {method.FullName}");
+                                methodInstr.Clear();
+                                var importer = new Importer(module);
+                                methodInstr.Add(OpCodes.Ldsfld.ToInstruction(importer.Import(typeof(DateTime).GetField("MaxValue"))));
+                                methodInstr.Add(OpCodes.Ret.ToInstruction());
+                                break;
+                            case "get_HasExpiration":
+                            case "get_IsExpired":
+                                Console.WriteLine($"Patching: {method.FullName}");
+                                methodInstr.Clear();
+                                methodInstr.Add(OpCodes.Ldc_I4_0.ToInstruction());
+                                methodInstr.Add(OpCodes.Ret.ToInstruction());
+                                break;
+                        }
                     }
                 }
             }
